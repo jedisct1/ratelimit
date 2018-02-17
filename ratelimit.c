@@ -127,3 +127,13 @@ ratelimiter_hit(RateLimiter *rate_limiter, const struct sockaddr *sa, uint64_t p
 
     return 0;
 }
+
+void
+ratelimiter_rekey(RateLimiter *rate_limiter)
+{
+    unsigned char tmp[16] = { 0U };
+
+    ratelimiter_hash(tmp, rate_limiter->v0, rate_limiter->v1);
+    memcpy(&rate_limiter->v0, &tmp[0], 8);
+    memcpy(&rate_limiter->v1, &tmp[8], 8);
+}

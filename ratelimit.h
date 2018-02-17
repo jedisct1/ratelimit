@@ -35,4 +35,9 @@ void ratelimiter_free(RateLimiter *rate_limiter);
  */
 int ratelimiter_hit(RateLimiter *rate_limiter, const struct sockaddr *sa, uint64_t peak);
 
+/**
+ * Updates the key, so that IP addresses are likely to end up in a different slot.
+ */
+void ratelimiter_rekey(RateLimiter *rate_limiter);
+
 #endif
