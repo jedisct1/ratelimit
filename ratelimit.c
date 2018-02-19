@@ -63,8 +63,9 @@ rotl64(const uint64_t x, const int b)
         v2 = ROTL64(v2, 32); \
     } while (0)
 
-static uint64_t
-ratelimiter_hash(const unsigned char ip[16], uint64_t v0, uint64_t v1)
+static void
+ratelimiter_hashes(uint64_t *i, uint64_t *j, const unsigned char ip[16],
+                   uint64_t v0, uint64_t v1)
 {
     uint64_t v2 = 0x736f6d6570736575ULL ^ 0x6c7967656e657261ULL ^ v0;
     uint64_t v3 = 0x646f72616e646f6dULL ^ 0x7465646279746573ULL ^ v1;
@@ -78,8 +79,9 @@ ratelimiter_hash(const unsigned char ip[16], uint64_t v0, uint64_t v1)
     SIPROUND;
     SIPROUND;
     SIPROUND;
-
-    return v0 ^ v1 ^ v2 ^ v3;
+    *i = v0 ^ v1 ^ v2 ^ v3;
+    SIPROUND;
+    *j = v0 ^ v1 ^ v2 ^ v3;
 }
 
 static int
@@ -102,17 +104,16 @@ ratelimit_sa_to_ip(unsigned char ip[16], const struct sockaddr *sa)
 }
 
 int
-ratelimiter_hit(RateLimiter *rate_limiter, const struct sockaddr *sa, uint64_t peak)
+ratelimiter_hit(RateLimiter *rate_limiter, const struct sockaddr *sa,
+                uint64_t peak)
 {
     unsigned char ip[16];
-    uint64_t      slot_i;
+    uint64_t      slot_i, slot_j;
+    int           ret;
 
     if (ratelimit_sa_to_ip(ip, sa) != 0) {
         return -1;
     }
-    slot_i = ratelimiter_hash(ip, rate_limiter->v0, rate_limiter->v1) &
-        rate_limiter->slots_mask;
-
     if (rate_limiter->pos <= rate_limiter->slots_mask) {
         rate_limiter->slots[rate_limiter->pos] /= 2U;
     }
@@ -120,20 +121,28 @@ ratelimiter_hit(RateLimiter *rate_limiter, const struct sockaddr *sa, uint64_t p
     if (rate_limiter->pos >= rate_limiter->period) {
         rate_limiter->pos = 0U;
     }
-    if (rate_limiter->slots[slot_i] >= peak) {
-        return 1;
+    ratelimiter_hashes(&slot_i, &slot_j, ip,
+                       rate_limiter->v0, rate_limiter->v1);
+    slot_i &= rate_limiter->slots_mask;
+    slot_j &= rate_limiter->slots_mask;
+    if (rate_limiter->slots[slot_i] < peak) {
+        rate_limiter->slots[slot_i]++;
+        ret = 0;
+    } else {
+        ret = 1;
     }
-    rate_limiter->slots[slot_i]++;
-
-    return 0;
+    if (rate_limiter->slots[slot_j] < peak) {
+        rate_limiter->slots[slot_j]++;
+        ret = 0;
+    }
+    return ret;
 }
 
 void
 ratelimiter_rekey(RateLimiter *rate_limiter)
 {
-    unsigned char tmp[16] = { 0U };
+    static unsigned char tmp[16] = { 0U };
 
-    ratelimiter_hash(tmp, rate_limiter->v0, rate_limiter->v1);
-    memcpy(&rate_limiter->v0, &tmp[0], 8);
-    memcpy(&rate_limiter->v1, &tmp[8], 8);
+    ratelimiter_hashes(&rate_limiter->v0, &rate_limiter->v1, tmp,
+                       rate_limiter->v0, rate_limiter->v1);
 }
