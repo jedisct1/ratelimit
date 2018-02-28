@@ -3,6 +3,8 @@
 
 #include <stdlib.h>
 #include <stdint.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 
 typedef struct RateLimiter_ {
     unsigned int *slots;
