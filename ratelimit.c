@@ -92,7 +92,9 @@ ratelimit_sa_to_ip(unsigned char ip[16], const struct sockaddr *sa)
 
     if (sa->sa_family == AF_INET) {
         memcpy(&in, sa, sizeof in);
-        memset(ip, 0, 12);
+        memset(ip, 0, 10);
+        ip[10] = 0xff;
+        ip[11] = 0xff;
         memcpy(&ip[12], &in.sin_addr.s_addr, 4);
     } else if (sa->sa_family == AF_INET6) {
         memcpy(&in6, sa, sizeof in6);
